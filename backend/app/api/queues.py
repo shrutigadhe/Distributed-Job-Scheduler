@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
+from datetime import datetime, timedelta, timezone
 from .. import schemas, models, auth_utils
 from ..database import get_db
 
@@ -75,3 +76,36 @@ def delete_queue(queue_id: str, db: Session = Depends(get_db), current_user: mod
     db.delete(queue)
     db.commit()
     return {"message": "Queue deleted successfully"}
+
+@router.get("/{queue_id}/stats", response_model=schemas.QueueStatsResponse)
+def get_queue_stats(queue_id: str, db: Session = Depends(get_db), current_user: models.User = Depends(auth_utils.get_current_user)):
+    queue = get_queue_if_owner(queue_id, db, current_user)
+    
+    queued = db.query(models.Job).filter(models.Job.queue_id == queue.id, models.Job.status == "queued").count()
+    running = db.query(models.Job).filter(models.Job.queue_id == queue.id, models.Job.status.in_(["claimed", "running"])).count()
+    completed = db.query(models.Job).filter(models.Job.queue_id == queue.id, models.Job.status == "completed").count()
+    failed = db.query(models.Job).filter(models.Job.queue_id == queue.id, models.Job.status == "failed").count()
+    
+    retrying = db.query(models.Job).filter(
+        models.Job.queue_id == queue.id,
+        models.Job.status.in_(["scheduled", "queued"]),
+        models.Job.retry_count > 0
+    ).count()
+
+    five_mins_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
+    completed_last_5m = db.query(models.Job).filter(
+        models.Job.queue_id == queue.id,
+        models.Job.status == "completed",
+        models.Job.updated_at >= five_mins_ago
+    ).count()
+    
+    throughput = completed_last_5m / 5.0
+
+    return {
+        "queued": queued,
+        "running": running,
+        "completed": completed,
+        "failed": failed,
+        "retrying": retrying,
+        "throughput_jobs_min": throughput
+    }

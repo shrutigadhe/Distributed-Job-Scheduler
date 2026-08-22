@@ -66,6 +66,7 @@ class Job(Base):
     retry_strategy = Column(String(50), default="fixed")  # fixed, linear, exponential
 
     cron_expression = Column(String(100), nullable=True)
+    batch_id = Column(String(36), nullable=True, index=True)
 
     created_at = Column(DateTime, default=get_utc_now)
     updated_at = Column(DateTime, default=get_utc_now, onupdate=get_utc_now)
@@ -81,7 +82,9 @@ class Worker(Base):
     name = Column(String(255), nullable=False, unique=True)
     status = Column(String(50), default="active")  # active, offline
     last_heartbeat_at = Column(DateTime, default=get_utc_now)
+    project_id = Column(String(36), ForeignKey("jf_projects.id"), nullable=True)
 
+    project = relationship("Project")
     executions = relationship("JobExecution", back_populates="worker")
 
 class JobExecution(Base):

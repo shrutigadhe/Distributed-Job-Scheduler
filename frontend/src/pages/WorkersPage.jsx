@@ -23,7 +23,7 @@ function WorkerCard({ worker }) {
           </div>
           <div style={{
             position:'absolute', bottom:-2, right:-2, width:11, height:11,
-            borderRadius:'50%', background: isOnline ? '#10b981' : '#6b7280',
+            borderRadius:'50%', background: isOnline ? '#10b981' : '#ef4444',
             border:'2px solid var(--bg-secondary)'
           }} />
         </div>
@@ -32,6 +32,11 @@ function WorkerCard({ worker }) {
           <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
             ID: {worker.id?.slice(0,8)}… &nbsp;·&nbsp; Last seen: {lastSeen}
           </p>
+          {worker.project_id && (
+            <p style={{ fontSize:10, color:'#818cf8', marginTop:2, fontFamily:'monospace' }}>
+              Project: {worker.project_id.slice(0,8)}…
+            </p>
+          )}
         </div>
       </div>
       <div style={{ display:'flex', alignItems:'center', gap:16 }}>
@@ -42,11 +47,11 @@ function WorkerCard({ worker }) {
         <span style={{
           display:'inline-flex', alignItems:'center', gap:5,
           padding:'4px 10px', borderRadius:20, fontSize:11, fontWeight:600,
-          background: isOnline ? 'rgba(16,185,129,0.12)' : 'rgba(107,114,128,0.12)',
-          color: isOnline ? '#34d399' : '#9ca3af',
-          border:`1px solid ${isOnline ? 'rgba(16,185,129,0.25)' : 'rgba(107,114,128,0.2)'}`
+          background: isOnline ? 'rgba(16,185,129,0.12)' : 'rgba(239,68,68,0.12)',
+          color: isOnline ? '#34d399' : '#f87171',
+          border:`1px solid ${isOnline ? 'rgba(16,185,129,0.25)' : 'rgba(239,68,68,0.2)'}`
         }}>
-          <Circle size={6} fill={isOnline ? '#34d399' : '#9ca3af'} stroke="none" />
+          <Circle size={6} fill={isOnline ? '#34d399' : '#f87171'} stroke="none" />
           {isOnline ? 'Online' : 'Offline'}
         </span>
       </div>
@@ -58,25 +63,25 @@ const HOW_IT_WORKS = [
   {
     step:'01',
     title:'Register & Heartbeat',
-    desc:'Workers register themselves in the database with a unique name and send heartbeat pings every 5 seconds to signal they\'re alive.',
+    desc:'Workers register themselves in the database with a unique name and send heartbeat pings every 2 seconds. Workers are marked OFFLINE if no heartbeat is received within 30 seconds.',
     color:'#6366f1'
   },
   {
     step:'02',
-    title:'Atomic Job Claiming',
-    desc:'Workers poll for queued/scheduled jobs and atomically claim one using SQLite locking — guaranteeing no two workers run the same job.',
+    title:'Project-Scoped Polling',
+    desc:'Workers are assigned to a project via --project-id flag. They only poll queues belonging to that project, enforcing concurrency limits per queue before claiming any job.',
     color:'#8b5cf6'
   },
   {
     step:'03',
-    title:'Execute & Report',
-    desc:'The worker executes the job payload, records the result in JobExecution, and marks the job as completed or failed.',
+    title:'Atomic Job Claiming',
+    desc:'Workers use FOR UPDATE SKIP LOCKED (PostgreSQL) to atomically claim one job at a time — guaranteeing no two workers run the same job even under heavy load.',
     color:'#10b981'
   },
   {
     step:'04',
     title:'Retry & DLQ',
-    desc:'On failure, workers apply the configured retry strategy (fixed / linear / exponential). After max retries, the job moves to the Dead Letter Queue.',
+    desc:'On failure, workers apply the configured retry strategy (fixed / linear / exponential). After max retries, the job moves to the Dead Letter Queue and the worker marks itself available.',
     color:'#f59e0b'
   },
 ];

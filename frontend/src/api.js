@@ -34,12 +34,16 @@ export const queuesAPI = {
   pause:  (queueId)         => api.post(`/queues/${queueId}/pause`),
   resume: (queueId)         => api.post(`/queues/${queueId}/resume`),
   delete: (queueId)         => api.delete(`/queues/${queueId}`),
+  stats:  (queueId)         => api.get(`/queues/${queueId}/stats`),
 };
 
 export const jobsAPI = {
-  list:   (queueId) => api.get(`/jobs/${queueId}`),
-  create: (queueId, data) => api.post(`/jobs/${queueId}`, data),
-  retry:  (jobId)   => api.post(`/jobs/${jobId}/retry`),
+  list:       (queueId)       => api.get(`/jobs/${queueId}`),
+  create:     (queueId, data) => api.post(`/jobs/${queueId}`, data),
+  retry:      (jobId)         => api.post(`/jobs/${jobId}/retry`),
+  batch:      (data)          => api.post('/jobs/batch', data),
+  search:     (params)        => api.get('/jobs/', { params }),
+  executions: (jobId)         => api.get(`/jobs/${jobId}/executions`),
 };
 
 export const dashboardAPI = {

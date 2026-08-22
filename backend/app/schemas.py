@@ -99,6 +99,7 @@ class WorkerResponse(BaseModel):
     status: Optional[str] = "online"
     last_heartbeat: Optional[datetime] = None
     jobs_processed: Optional[int] = 0
+    project_id: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -111,3 +112,50 @@ class DashboardMetrics(BaseModel):
     jobs_completed: int
     jobs_failed: int
     workers: Optional[List[Dict]] = []
+
+# Execution Log Response
+class JobExecutionResponse(BaseModel):
+    id: str
+    job_id: str
+    worker_id: Optional[str] = None
+    status: str
+    log_output: Optional[str] = None
+    error_message: Optional[str] = None
+    attempt_number: int
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    class Config:
+        from_attributes = True
+
+# Batch Job Schemas
+class BatchJobItem(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    payload: Dict[str, Any] = {}
+    priority: Optional[int] = 0
+    max_retries: Optional[int] = 3
+    retry_strategy: Optional[str] = "fixed"
+
+class BatchJobCreate(BaseModel):
+    queue_id: str
+    jobs: List[BatchJobItem]
+
+class BatchJobResponse(BaseModel):
+    batch_id: str
+    count: int
+
+# General Job Explorer
+class JobSearchResponse(BaseModel):
+    total: int
+    page: int
+    limit: int
+    items: List[JobResponse]
+
+# Queue Statistics Response
+class QueueStatsResponse(BaseModel):
+    queued: int
+    running: int
+    completed: int
+    failed: int
+    retrying: int
+    throughput_jobs_min: float

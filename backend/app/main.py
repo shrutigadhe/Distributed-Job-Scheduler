@@ -13,7 +13,17 @@ with engine.connect() as conn:
         conn.execute(text("ALTER TABLE jf_projects ADD COLUMN description VARCHAR(512)"))
         conn.commit()
     except Exception:
-        pass  # column already exists
+        pass
+    try:
+        conn.execute(text("ALTER TABLE jf_jobs ADD COLUMN batch_id VARCHAR(36)"))
+        conn.commit()
+    except Exception:
+        pass
+    try:
+        conn.execute(text("ALTER TABLE jf_workers ADD COLUMN project_id VARCHAR(36)"))
+        conn.commit()
+    except Exception:
+        pass
 
 
 app = FastAPI(title="Distributed Job Scheduler API")

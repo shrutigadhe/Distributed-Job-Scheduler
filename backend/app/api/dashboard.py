@@ -13,12 +13,12 @@ def get_dashboard_metrics(db: Session = Depends(get_db), current_user: models.Us
         models.Project.user_id == current_user.id
     ).count()
 
-    # Active workers (heartbeat in last 5 mins)
-    five_mins_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(minutes=5)
+    # Active workers (heartbeat in last 30 seconds)
+    thirty_secs_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=30)
     all_workers = db.query(models.Worker).all()
     active_workers_list = [
         w for w in all_workers
-        if w.last_heartbeat_at and w.last_heartbeat_at >= five_mins_ago
+        if w.last_heartbeat_at and w.last_heartbeat_at >= thirty_secs_ago and w.status == "active"
     ]
     active_workers = len(active_workers_list)
 
@@ -37,13 +37,15 @@ def get_dashboard_metrics(db: Session = Depends(get_db), current_user: models.Us
     # Build workers list for UI
     workers_data = []
     for w in all_workers:
-        is_active = w.last_heartbeat_at and w.last_heartbeat_at >= five_mins_ago
+        is_active = w.last_heartbeat_at and w.last_heartbeat_at >= thirty_secs_ago and w.status == "active"
+        jobs_processed = db.query(models.JobExecution).filter(models.JobExecution.worker_id == w.id).count()
         workers_data.append({
             "id": str(w.id),
             "name": w.name,
             "status": "online" if is_active else "offline",
             "last_heartbeat": w.last_heartbeat_at.isoformat() if w.last_heartbeat_at else None,
-            "jobs_processed": 0,
+            "jobs_processed": jobs_processed,
+            "project_id": str(w.project_id) if w.project_id else None,
         })
 
     return {

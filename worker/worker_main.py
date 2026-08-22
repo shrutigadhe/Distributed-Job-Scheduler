@@ -3,6 +3,8 @@ import sys
 import time
 import uuid
 import logging
+import argparse
+import signal
 from datetime import datetime, timezone, timedelta
 
 # Add backend directory to path so we can import app.models locally
@@ -12,10 +14,17 @@ from sqlalchemy import create_engine, select, update, text
 from sqlalchemy.orm import sessionmaker
 from croniter import croniter
 
-from app.models import Worker, Job, JobExecution, DLQEntry, Base
+from app.models import Worker, Job, JobExecution, DLQEntry, Queue, Base
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("worker")
+
+# Parse command line arguments
+parser = argparse.ArgumentParser(description="JobFlow background worker process.")
+parser.add_argument("--project-id", type=str, help="Only process jobs from this project.")
+args, unknown = parser.parse_known_args()
+
+PROJECT_ID = args.project_id or os.getenv("PROJECT_ID")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./job_scheduler.db")
 WORKER_NAME = os.getenv("WORKER_NAME", f"worker-{uuid.uuid4().hex[:8]}")
@@ -34,12 +43,23 @@ def calculate_next_retry(attempt_number, strategy):
     else: # fixed
         return timedelta(seconds=10)
 
+# Graceful Shutdown Flag
+shutdown_requested = False
+
+def handle_shutdown(signum, frame):
+    global shutdown_requested
+    logger.info("Shutdown signal received. Will exit gracefully after current job finishes...")
+    shutdown_requested = True
+
+signal.signal(signal.SIGINT, handle_shutdown)
+signal.signal(signal.SIGTERM, handle_shutdown)
+
 def worker_loop():
-    logger.info(f"Starting worker {WORKER_NAME}")
+    logger.info(f"Starting worker {WORKER_NAME} (Assigned Project ID: {PROJECT_ID})")
     
     # Register worker
     db = SessionLocal()
-    worker = Worker(name=WORKER_NAME)
+    worker = Worker(name=WORKER_NAME, project_id=PROJECT_ID, status="active")
     try:
         db.add(worker)
         db.commit()
@@ -49,62 +69,80 @@ def worker_loop():
         worker = db.query(Worker).filter(Worker.name == WORKER_NAME).first()
         worker.last_heartbeat_at = get_utc_now()
         worker.status = "active"
+        worker.project_id = PROJECT_ID
         db.commit()
     
     worker_id = worker.id
     db.close()
 
-    while True:
+    while not shutdown_requested:
         db = SessionLocal()
         try:
-            # Heartbeat
-            db.execute(update(Worker).where(Worker.id == worker_id).values(last_heartbeat_at=get_utc_now()))
+            # Send Heartbeat
+            db.execute(update(Worker).where(Worker.id == worker_id).values(
+                last_heartbeat_at=get_utc_now(),
+                status="active"
+            ))
             db.commit()
 
-            # Claim Job - Atomically pick the highest priority job that is ready
-            if "sqlite" in DATABASE_URL:
-                # SQLite doesn't support SKIP LOCKED, but locks the whole file anyway
-                job = db.query(Job).filter(
-                    Job.status.in_(['queued', 'scheduled']),
-                    (Job.scheduled_at == None) | (Job.scheduled_at <= get_utc_now())
-                ).order_by(Job.priority.desc(), Job.created_at.asc()).first()
-                
-                if job:
-                    job.status = 'claimed'
-                    job.updated_at = get_utc_now()
-                    db.commit()
-                    row = [job.id]
-                else:
-                    row = None
-            else:
-                claim_sql = text("""
-                    UPDATE jf_jobs 
-                    SET status = 'claimed', updated_at = NOW() 
-                    WHERE id = (
-                        SELECT id FROM jf_jobs 
-                        WHERE status IN ('queued', 'scheduled') 
-                          AND (scheduled_at IS NULL OR scheduled_at <= NOW())
-                        ORDER BY priority DESC, created_at ASC 
-                        FOR UPDATE SKIP LOCKED
-                        LIMIT 1
-                    )
-                    RETURNING id;
-                """)
-                
-                result = db.execute(claim_sql)
-                row = result.fetchone()
-                db.commit()
+            # 1. Fetch eligible queues (respecting project_id and concurrency limits)
+            queues_query = db.query(Queue)
+            if PROJECT_ID:
+                queues_query = queues_query.filter(Queue.project_id == PROJECT_ID)
             
-            if not row:
-                time.sleep(2)
+            queues = queues_query.all()
+            eligible_queue_ids = []
+            
+            for q in queues:
+                if q.is_paused:
+                    continue
+                # Count currently claimed/running jobs in this queue
+                running_jobs = db.query(Job).filter(
+                    Job.queue_id == q.id,
+                    Job.status.in_(['claimed', 'running'])
+                ).count()
+                
+                if running_jobs < q.concurrency_limit:
+                    eligible_queue_ids.append(q.id)
+
+            if not eligible_queue_ids:
+                # No work to do or concurrency limit reached for all queues
+                db.close()
+                for _ in range(20):
+                    if shutdown_requested:
+                        break
+                    time.sleep(0.1)
                 continue
-                
-            job_id = row[0]
-            job = db.query(Job).filter(Job.id == job_id).first()
+
+            # 2. Claim Job - Atomic pick with FOR UPDATE SKIP LOCKED
+            job_query = db.query(Job).filter(
+                Job.queue_id.in_(eligible_queue_ids),
+                Job.status.in_(['queued', 'scheduled']),
+                (Job.scheduled_at == None) | (Job.scheduled_at <= get_utc_now())
+            ).order_by(Job.priority.desc(), Job.created_at.asc())
+
+            if "sqlite" not in DATABASE_URL:
+                # PostgreSQL support for atomic claims
+                job_query = job_query.with_for_update(skip_locked=True)
+
+            job = job_query.first()
             
-            logger.info(f"Claimed job {job_id} ({job.name})")
+            if not job:
+                db.close()
+                for _ in range(20):
+                    if shutdown_requested:
+                        break
+                    time.sleep(0.1)
+                continue
             
-            # Create Execution record
+            # Atomic update of status to claimed
+            job.status = 'claimed'
+            job.updated_at = get_utc_now()
+            db.commit()
+            
+            logger.info(f"Claimed job {job.id} ({job.name}) on queue {job.queue_id}")
+
+            # 3. Create Execution Record
             execution = JobExecution(
                 job_id=job.id,
                 worker_id=worker_id,
@@ -113,8 +151,8 @@ def worker_loop():
             )
             db.add(execution)
             db.commit()
-            
-            # Execute logic (mocked)
+
+            # 4. Execute Job
             try:
                 # Mock work
                 time.sleep(2)
@@ -149,7 +187,7 @@ def worker_loop():
                     db.add(next_job)
                     
             except Exception as e:
-                logger.error(f"Job {job_id} failed: {e}")
+                logger.error(f"Job {job.id} failed: {e}")
                 execution.status = "failed"
                 execution.completed_at = get_utc_now()
                 execution.error_message = str(e)
@@ -169,10 +207,30 @@ def worker_loop():
         except Exception as e:
             logger.error(f"Worker error: {e}")
             db.rollback()
-            time.sleep(2)
+            for _ in range(20):
+                if shutdown_requested:
+                    break
+                time.sleep(0.1)
         finally:
             db.close()
 
+    # Graceful exit - Mark worker offline
+    logger.info("Graceful shutdown active. Marking worker offline in database...")
+    db = SessionLocal()
+    try:
+        db.execute(update(Worker).where(Worker.id == worker_id).values(
+            status="offline",
+            last_heartbeat_at=get_utc_now()
+        ))
+        db.commit()
+        logger.info("Worker status set to offline. Goodbye!")
+    except Exception as e:
+        logger.error(f"Error marking worker offline: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
 if __name__ == "__main__":
-    time.sleep(10) # Wait for db to be ready
+    # Wait for database if running on docker start
+    time.sleep(2)
     worker_loop()
