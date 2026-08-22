@@ -15,8 +15,9 @@ def get_dashboard_metrics(db: Session = Depends(get_db), current_user: models.Us
     ).count()
 
     # Active workers — heartbeat within last 30 seconds.
-    # Use naive UTC to match how worker stores last_heartbeat_at (datetime.utcnow())
-    thirty_secs_ago = datetime.utcnow() - timedelta(seconds=30)
+    # Worker stores last_heartbeat_at as naive UTC (datetime.now(utc).replace(tzinfo=None))
+    # so we compare with naive UTC here too.
+    thirty_secs_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=30)
     all_workers = db.query(models.Worker).all()
     active_workers_list = [
         w for w in all_workers

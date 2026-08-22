@@ -142,7 +142,7 @@ def retry_job(job_id: str, db: Session = Depends(get_db), current_user: models.U
 
     job.status = "queued"
     job.retry_count = 0
-    job.scheduled_at = datetime.utcnow()
+    job.scheduled_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     dlq_entry = db.query(models.DLQEntry).filter(models.DLQEntry.job_id == str(job.id)).first()
     if dlq_entry:

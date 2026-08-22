@@ -40,8 +40,9 @@ engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_utc_now():
-    # Return naive UTC datetime to match how SQLAlchemy stores datetimes (no tzinfo)
-    return datetime.utcnow()
+    # Naive UTC datetime (no tzinfo) to match SQLAlchemy column storage.
+    # Uses timezone-aware intermediate to avoid the utcnow() DeprecationWarning.
+    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 def calculate_next_retry(attempt_number, strategy):
     if strategy == "linear":
@@ -165,9 +166,10 @@ def worker_loop():
                 # Mock work
                 time.sleep(2)
                 
-                # Check for forced failure based on payload for demo purposes
-                if job.payload and job.payload.get("force_fail"):
-                    raise Exception(f"Forced failure: {job.payload.get('force_fail')}")
+                # Check for forced failure (set payload {"fail": true} or {"force_fail": "reason"} to test DLQ)
+                if job.payload and (job.payload.get("fail") or job.payload.get("force_fail")):
+                    reason = job.payload.get("force_fail") or "Forced failure (payload.fail=true)"
+                    raise Exception(reason)
                     
                 execution.status = "completed"
                 execution.completed_at = get_utc_now()
