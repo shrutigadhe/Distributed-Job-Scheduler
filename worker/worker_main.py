@@ -7,8 +7,10 @@ import argparse
 import signal
 from datetime import datetime, timezone, timedelta
 
-# Add backend directory to path so we can import app.models locally
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', 'backend'))
+# Make backend importable whether running as script or with PYTHONPATH=backend
+_backend_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend')
+if _backend_path not in sys.path:
+    sys.path.insert(0, _backend_path)
 
 from sqlalchemy import create_engine, select, update, text
 from sqlalchemy.orm import sessionmaker
@@ -27,13 +29,19 @@ args, unknown = parser.parse_known_args()
 PROJECT_ID = args.project_id or os.getenv("PROJECT_ID")
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./job_scheduler.db")
+# Render gives postgres://, SQLAlchemy needs postgresql://
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
 WORKER_NAME = os.getenv("WORKER_NAME", f"worker-{uuid.uuid4().hex[:8]}")
 
-engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+connect_args = {"check_same_thread": False} if "sqlite" in DATABASE_URL else {}
+engine = create_engine(DATABASE_URL, connect_args=connect_args)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def get_utc_now():
-    return datetime.now(timezone.utc)
+    # Return naive UTC datetime to match how SQLAlchemy stores datetimes (no tzinfo)
+    return datetime.utcnow()
 
 def calculate_next_retry(attempt_number, strategy):
     if strategy == "linear":
@@ -231,6 +239,19 @@ def worker_loop():
         db.close()
 
 if __name__ == "__main__":
-    # Wait for database if running on docker start
-    time.sleep(2)
+    # Wait for DB to be ready (important on Render cold starts and Docker)
+    logger.info(f"Connecting to database: {DATABASE_URL[:40]}...")
+    for attempt in range(1, 16):
+        try:
+            with engine.connect() as conn:
+                conn.execute(text("SELECT 1"))
+            logger.info("Database connection established.")
+            break
+        except Exception as e:
+            logger.warning(f"DB not ready (attempt {attempt}/15): {e}")
+            time.sleep(4)
+    else:
+        logger.error("Could not connect to DB after 15 attempts. Exiting.")
+        sys.exit(1)
+
     worker_loop()

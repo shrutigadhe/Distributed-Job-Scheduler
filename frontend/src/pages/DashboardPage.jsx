@@ -4,10 +4,11 @@ import {
   AreaChart, Area, BarChart, Bar, XAxis, YAxis,
   CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell
 } from 'recharts';
-import { TrendingUp, Cpu, Layers, Clock, CheckCircle, XCircle, Activity, Zap } from 'lucide-react';
+import { TrendingUp, Cpu, Layers, Clock, CheckCircle, XCircle, Activity, Zap, FolderOpen } from 'lucide-react';
 
 const metrics_config = [
-  { key: 'active_workers',  label: 'Active Workers',  icon: Cpu,           color: '#10b981', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.2)' },
+  { key: 'total_projects',  label: 'Projects',        icon: FolderOpen,     color: '#8b5cf6', bg: 'rgba(139,92,246,0.1)', border: 'rgba(139,92,246,0.2)' },
+  { key: 'active_workers',  label: 'Active Workers',  icon: Cpu,            color: '#10b981', bg: 'rgba(16,185,129,0.1)',  border: 'rgba(16,185,129,0.2)' },
   { key: 'total_queues',    label: 'Total Queues',    icon: Layers,         color: '#6366f1', bg: 'rgba(99,102,241,0.1)', border: 'rgba(99,102,241,0.2)' },
   { key: 'jobs_queued',     label: 'Jobs Queued',     icon: Clock,          color: '#f59e0b', bg: 'rgba(245,158,11,0.1)', border: 'rgba(245,158,11,0.2)' },
   { key: 'jobs_running',    label: 'Running',         icon: Activity,       color: '#3b82f6', bg: 'rgba(59,130,246,0.1)', border: 'rgba(59,130,246,0.2)' },
@@ -32,7 +33,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export default function DashboardPage() {
-  const [metrics, setMetrics] = useState({ total_queues: 0, active_workers: 0, jobs_queued: 0, jobs_running: 0, jobs_completed: 0, jobs_failed: 0 });
+  const [metrics, setMetrics] = useState({ total_projects: 0, total_queues: 0, active_workers: 0, jobs_queued: 0, jobs_running: 0, jobs_completed: 0, jobs_failed: 0 });
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
@@ -82,7 +83,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Stat cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
         {metrics_config.map(({ key, label, icon: Icon, color, bg, border }) => (
           <div key={key} className="metric-card" style={{ borderColor: border, background: bg }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>

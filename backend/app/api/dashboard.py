@@ -8,13 +8,15 @@ router = APIRouter()
 
 @router.get("/metrics")
 def get_dashboard_metrics(db: Session = Depends(get_db), current_user: models.User = Depends(auth_utils.get_current_user)):
-    # Total queues for user
+    # Total projects and queues for user
+    total_projects = db.query(models.Project).filter(models.Project.user_id == current_user.id).count()
     total_queues = db.query(models.Queue).join(models.Project).filter(
         models.Project.user_id == current_user.id
     ).count()
 
-    # Active workers (heartbeat in last 30 seconds)
-    thirty_secs_ago = datetime.now(timezone.utc).replace(tzinfo=None) - timedelta(seconds=30)
+    # Active workers — heartbeat within last 30 seconds.
+    # Use naive UTC to match how worker stores last_heartbeat_at (datetime.utcnow())
+    thirty_secs_ago = datetime.utcnow() - timedelta(seconds=30)
     all_workers = db.query(models.Worker).all()
     active_workers_list = [
         w for w in all_workers
@@ -49,6 +51,7 @@ def get_dashboard_metrics(db: Session = Depends(get_db), current_user: models.Us
         })
 
     return {
+        "total_projects": total_projects,
         "total_queues": total_queues,
         "active_workers": active_workers,
         "jobs_queued": jobs_queued,

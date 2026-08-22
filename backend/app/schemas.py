@@ -105,6 +105,7 @@ class WorkerResponse(BaseModel):
 
 # Dashboard Metrics
 class DashboardMetrics(BaseModel):
+    total_projects: int = 0
     total_queues: int
     active_workers: int
     jobs_queued: int

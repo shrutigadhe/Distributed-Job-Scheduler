@@ -205,7 +205,7 @@ export default function ProjectsPage() {
                         <div>
                           <p style={{ fontSize:13, fontWeight:600, color:'white' }}>{q.name}</p>
                           <p style={{ fontSize:11, color:'var(--text-muted)', marginTop:2 }}>
-                            Max workers: {q.max_workers} &nbsp;·&nbsp;
+                            Concurrency: {q.concurrency_limit} &nbsp;·&nbsp;
                             <span style={{ color: q.is_paused ? '#f59e0b' : '#10b981' }}>
                               {q.is_paused ? 'Paused' : 'Active'}
                             </span>
@@ -262,8 +262,8 @@ export default function ProjectsPage() {
               <input className="input" required placeholder="e.g. high-priority"
                 value={queueForm.name} onChange={e => setQueueForm(f => ({ ...f, name:e.target.value }))} />
             </Field>
-            <Field label="Max Workers">
-              <input className="input" type="number" min={1} max={20}
+            <Field label="Concurrency Limit (max parallel jobs)">
+              <input className="input" type="number" min={1} max={50}
                 value={queueForm.max_workers} onChange={e => setQueueForm(f => ({ ...f, max_workers:parseInt(e.target.value)||1 }))} />
             </Field>
             <div style={{ display:'flex', gap:10, marginTop:4 }}>
