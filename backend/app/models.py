@@ -13,7 +13,7 @@ def get_utc_now():
     return datetime.now(timezone.utc)
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "jf_users"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     email = Column(String(255), unique=True, index=True, nullable=False)
@@ -23,22 +23,22 @@ class User(Base):
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
 
 class Project(Base):
-    __tablename__ = "projects"
+    __tablename__ = "jf_projects"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     name = Column(String(255), nullable=False)
     description = Column(String(512), nullable=True)
-    user_id = Column(String(36), ForeignKey("users.id"), nullable=False)
+    user_id = Column(String(36), ForeignKey("jf_users.id"), nullable=False)
     created_at = Column(DateTime, default=get_utc_now)
 
     owner = relationship("User", back_populates="projects")
     queues = relationship("Queue", back_populates="project", cascade="all, delete-orphan")
 
 class Queue(Base):
-    __tablename__ = "queues"
+    __tablename__ = "jf_queues"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
-    project_id = Column(String(36), ForeignKey("projects.id"), nullable=False)
+    project_id = Column(String(36), ForeignKey("jf_projects.id"), nullable=False)
     name = Column(String(255), nullable=False)
     concurrency_limit = Column(Integer, default=10)
     is_paused = Column(Boolean, default=False)
@@ -48,10 +48,10 @@ class Queue(Base):
     jobs = relationship("Job", back_populates="queue", cascade="all, delete-orphan")
 
 class Job(Base):
-    __tablename__ = "jobs"
+    __tablename__ = "jf_jobs"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
-    queue_id = Column(String(36), ForeignKey("queues.id"), nullable=False, index=True)
+    queue_id = Column(String(36), ForeignKey("jf_queues.id"), nullable=False, index=True)
     name = Column(String(255), nullable=False)
     payload = Column(JSON, default=dict)
 
@@ -75,7 +75,7 @@ class Job(Base):
     dlq_entry = relationship("DLQEntry", back_populates="job", uselist=False, cascade="all, delete-orphan")
 
 class Worker(Base):
-    __tablename__ = "workers"
+    __tablename__ = "jf_workers"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
     name = Column(String(255), nullable=False, unique=True)
@@ -85,11 +85,11 @@ class Worker(Base):
     executions = relationship("JobExecution", back_populates="worker")
 
 class JobExecution(Base):
-    __tablename__ = "job_executions"
+    __tablename__ = "jf_job_executions"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
-    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False)
-    worker_id = Column(String(36), ForeignKey("workers.id"), nullable=True)
+    job_id = Column(String(36), ForeignKey("jf_jobs.id"), nullable=False)
+    worker_id = Column(String(36), ForeignKey("jf_workers.id"), nullable=True)
 
     status = Column(String(50), default="running")  # running, completed, failed
     log_output = Column(Text, nullable=True)
@@ -103,10 +103,10 @@ class JobExecution(Base):
     worker = relationship("Worker", back_populates="executions")
 
 class DLQEntry(Base):
-    __tablename__ = "dlq_entries"
+    __tablename__ = "jf_dlq_entries"
 
     id = Column(String(36), primary_key=True, default=new_uuid)
-    job_id = Column(String(36), ForeignKey("jobs.id"), nullable=False, unique=True)
+    job_id = Column(String(36), ForeignKey("jf_jobs.id"), nullable=False, unique=True)
     error_message = Column(Text, nullable=True)
     moved_at = Column(DateTime, default=get_utc_now)
 

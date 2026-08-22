@@ -78,10 +78,10 @@ def worker_loop():
                     row = None
             else:
                 claim_sql = text("""
-                    UPDATE jobs 
+                    UPDATE jf_jobs 
                     SET status = 'claimed', updated_at = NOW() 
                     WHERE id = (
-                        SELECT id FROM jobs 
+                        SELECT id FROM jf_jobs 
                         WHERE status IN ('queued', 'scheduled') 
                           AND (scheduled_at IS NULL OR scheduled_at <= NOW())
                         ORDER BY priority DESC, created_at ASC 

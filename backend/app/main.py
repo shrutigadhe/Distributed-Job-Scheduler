@@ -10,7 +10,7 @@ Base.metadata.create_all(bind=engine)
 from sqlalchemy import text
 with engine.connect() as conn:
     try:
-        conn.execute(text("ALTER TABLE projects ADD COLUMN description VARCHAR(512)"))
+        conn.execute(text("ALTER TABLE jf_projects ADD COLUMN description VARCHAR(512)"))
         conn.commit()
     except Exception:
         pass  # column already exists
