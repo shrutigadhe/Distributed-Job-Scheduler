@@ -18,7 +18,7 @@ const NAV = [
   { id:'workers',   label:'Workers',      icon:Cpu },
 ];
 
-function Sidebar({ page, setPage, onLogout }) {
+function Sidebar({ page, setPage, onLogout, user }) {
   return (
     <aside style={{
       width:220, flexShrink:0, display:'flex', flexDirection:'column',
@@ -53,6 +53,14 @@ function Sidebar({ page, setPage, onLogout }) {
 
       {/* Footer */}
       <div style={{ padding:'12px 10px', borderTop:'1px solid var(--border)' }}>
+        {user && (
+          <div style={{ padding: '0 12px 12px', fontSize: 12, borderBottom: '1px solid var(--border)', marginBottom: 12 }}>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: 0.5, marginBottom: 2 }}>Logged in as</p>
+            <p style={{ color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={user.email}>
+              {user.email}
+            </p>
+          </div>
+        )}
         <button onClick={onLogout} className="nav-item" style={{ width:'100%', color:'var(--text-muted)' }}>
           <LogOut size={15} />
           <span>Logout</span>
@@ -68,14 +76,30 @@ function Sidebar({ page, setPage, onLogout }) {
 function AppShell() {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [page, setPage] = useState('dashboard');
+  const [user, setUser] = useState(null);
 
   useEffect(() => {
-    if (!token) return;
-    authAPI.me().catch(() => { localStorage.removeItem('token'); setToken(null); });
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    authAPI.me()
+      .then(res => {
+        setUser(res.data);
+      })
+      .catch(() => {
+        localStorage.removeItem('token');
+        setToken(null);
+        setUser(null);
+      });
   }, [token]);
 
   const handleLogin = () => setToken(localStorage.getItem('token'));
-  const handleLogout = () => { localStorage.removeItem('token'); setToken(null); };
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    setUser(null);
+  };
 
   if (!token) return <LoginPage onLogin={handleLogin} />;
 
@@ -88,7 +112,7 @@ function AppShell() {
 
   return (
     <div style={{ display:'flex', minHeight:'100vh', background:'var(--bg-primary)' }}>
-      <Sidebar page={page} setPage={setPage} onLogout={handleLogout} />
+      <Sidebar page={page} setPage={setPage} onLogout={handleLogout} user={user} />
       <main style={{ flex:1, padding:'28px 32px', overflowY:'auto', minWidth:0 }}>
         {PAGES[page]}
       </main>

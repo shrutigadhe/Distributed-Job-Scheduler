@@ -135,7 +135,28 @@ function ExecutionLogModal({ job, onClose }) {
 function BatchModal({ queues, onClose, onSuccess }) {
   const toast = useToast();
   const [queueId, setQueueId] = useState('');
-  const [rawJobs, setRawJobs] = useState(`[\n  {"name": "job-1", "payload": {}},\n  {"name": "job-2", "payload": {}}\n]`);
+  const [rawJobs, setRawJobs] = useState(`[
+  {
+    "name": "Successful Job Example",
+    "payload": {
+      "task": "send_welcome_email",
+      "user_email": "hello@example.com"
+    },
+    "priority": 5,
+    "max_retries": 3,
+    "retry_strategy": "exponential"
+  },
+  {
+    "name": "Failed Job Example (Tests Retries & DLQ)",
+    "payload": {
+      "task": "sync_analytics",
+      "force_fail": "API Rate Limit Exceeded"
+    },
+    "priority": 1,
+    "max_retries": 2,
+    "retry_strategy": "linear"
+  }
+]`);
   const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e) => {
